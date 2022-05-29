@@ -1,0 +1,5 @@
+project: rnshah9/ps2sdk
+target: bin2s
+
+cmds:
+  - cmd: /repo/tools/bin2s/src/bin2s @@ out label
