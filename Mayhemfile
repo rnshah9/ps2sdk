@@ -2,4 +2,4 @@ project: ps2sdk
 target: bin2s
 
 cmds:
-  - cmd: /repo/tools/bin2s/src/bin2s @@ out label
+  - cmd: /bin2s @@ out label
