@@ -1,3 +1,4 @@
+
 #include <errno.h>
 #include <stdio.h>
 #include <dmacman.h>
@@ -15,11 +16,10 @@
 #include <smapregs.h>
 #include <speedregs.h>
 
-#include <netman.h>
-
 #include "main.h"
 
 #include "xfer.h"
+#include "ipstack.h"
 
 extern struct SmapDriverData SmapDriverData;
 
@@ -51,7 +51,7 @@ static inline void CopyFromFIFO(volatile u8 *smap_regbase, void *buffer, unsigne
 
     result = SmapDmaTransfer(smap_regbase, buffer, length, DMAC_TO_MEM);
 
-    for (i = result; i < length; i += 4) {
+    for (i = result; (unsigned int)i < length; i += 4) {
         ((u32 *)buffer)[i / 4] = SMAP_REG32(SMAP_R_RXFIFO_DATA);
     }
 }
@@ -62,7 +62,7 @@ static inline void CopyToFIFO(volatile u8 *smap_regbase, const void *buffer, uns
 
     result = SmapDmaTransfer(smap_regbase, (void *)buffer, length, DMAC_FROM_MEM);
 
-    for (i = result; i < length; i += 4) {
+    for (i = result; (unsigned int)i < length; i += 4) {
         SMAP_REG32(SMAP_R_TXFIFO_DATA) = ((u32 *)buffer)[i / 4];
     }
 }
@@ -73,7 +73,6 @@ int HandleRxIntr(struct SmapDriverData *SmapDrivPrivData)
     int NumPacketsReceived, i;
     volatile smap_bd_t *PktBdPtr;
     volatile u8 *smap_regbase;
-    void *pbuf, *payload;
     u16 ctrl_stat, length, pointer, LengthRounded;
 
     smap_regbase = SmapDrivPrivData->smap_regbase;
@@ -83,12 +82,12 @@ int HandleRxIntr(struct SmapDriverData *SmapDrivPrivData)
     /*  Non-Sony: Workaround for the hardware BUG whereby the Rx FIFO of the MAL becomes unresponsive or loses frames when under load.
         Check that there are frames to process, before accessing the BD registers. */
     while (SMAP_REG8(SMAP_R_RXFIFO_FRAME_CNT) > 0) {
-        PktBdPtr = &rx_bd[SmapDrivPrivData->RxBDIndex % SMAP_BD_MAX_ENTRY];
+        PktBdPtr  = &rx_bd[SmapDrivPrivData->RxBDIndex % SMAP_BD_MAX_ENTRY];
         ctrl_stat = PktBdPtr->ctrl_stat;
         if (!(ctrl_stat & SMAP_BD_RX_EMPTY)) {
-            length = PktBdPtr->length;
+            length        = PktBdPtr->length;
             LengthRounded = (length + 3) & ~3;
-            pointer = PktBdPtr->pointer;
+            pointer       = PktBdPtr->pointer;
 
             if (ctrl_stat & (SMAP_BD_RX_INRANGE | SMAP_BD_RX_OUTRANGE | SMAP_BD_RX_FRMTOOLONG | SMAP_BD_RX_BADFCS | SMAP_BD_RX_ALIGNERR | SMAP_BD_RX_SHORTEVNT | SMAP_BD_RX_RUNTFRM | SMAP_BD_RX_OVERRUN)) {
                 for (i = 0; i < 16; i++)
@@ -109,9 +108,11 @@ int HandleRxIntr(struct SmapDriverData *SmapDrivPrivData)
                 // Original did this whenever a frame is dropped.
                 SMAP_REG16(SMAP_R_RXFIFO_RD_PTR) = pointer + LengthRounded;
             } else {
-                if ((pbuf = NetManNetProtStackAllocRxPacket(LengthRounded, &payload)) != NULL) {
+                void *pbuf, *payload;
+
+                if ((pbuf = SMapCommonStackAllocRxPacket(LengthRounded, &payload)) != NULL) {
                     CopyFromFIFO(SmapDrivPrivData->smap_regbase, payload, length, pointer);
-                    NetManNetProtStackEnQRxPacket(pbuf);
+                    SMapStackEnQRxPacket(pbuf);
                     NumPacketsReceived++;
                 } else {
                     SmapDrivPrivData->RuntimeStats.RxAllocFail++;
@@ -121,7 +122,7 @@ int HandleRxIntr(struct SmapDriverData *SmapDrivPrivData)
             }
 
             SMAP_REG8(SMAP_R_RXFIFO_FRAME_DEC) = 0;
-            PktBdPtr->ctrl_stat = SMAP_BD_RX_EMPTY;
+            PktBdPtr->ctrl_stat                = SMAP_BD_RX_EMPTY;
             SmapDrivPrivData->RxBDIndex++;
         } else
             break;
@@ -143,7 +144,8 @@ int HandleTxReqs(struct SmapDriverData *SmapDrivPrivData)
     while (1) {
         int length;
 
-        if ((length = NetManTxPacketNext(&data)) < 1) {
+        data = NULL;
+        if ((length = SMAPCommonTxPacketNext(&data)) < 1) {
             return result;
         }
         SmapDrivPrivData->packetToSend = data;
@@ -158,15 +160,15 @@ int HandleTxReqs(struct SmapDriverData *SmapDrivPrivData)
                     smap_regbase = SmapDrivPrivData->smap_regbase;
 
                     BD_data_ptr = SMAP_REG16(SMAP_R_TXFIFO_WR_PTR) + SMAP_TX_BASE;
-                    BD_ptr = &tx_bd[SmapDrivPrivData->TxBDIndex % SMAP_BD_MAX_ENTRY];
+                    BD_ptr      = &tx_bd[SmapDrivPrivData->TxBDIndex % SMAP_BD_MAX_ENTRY];
 
                     CopyToFIFO(SmapDrivPrivData->smap_regbase, data, length);
 
                     result++;
-                    BD_ptr->length = length;
-                    BD_ptr->pointer = BD_data_ptr;
+                    BD_ptr->length                     = length;
+                    BD_ptr->pointer                    = BD_data_ptr;
                     SMAP_REG8(SMAP_R_TXFIFO_FRAME_INC) = 0;
-                    BD_ptr->ctrl_stat = SMAP_BD_TX_READY | SMAP_BD_TX_GENFCS | SMAP_BD_TX_GENPAD;
+                    BD_ptr->ctrl_stat                  = SMAP_BD_TX_READY | SMAP_BD_TX_GENFCS | SMAP_BD_TX_GENPAD;
                     SmapDrivPrivData->TxBDIndex++;
                     SmapDrivPrivData->NumPacketsInTx++;
                     SmapDrivPrivData->TxBufferSpaceAvailable -= SizeRounded;
@@ -177,6 +179,6 @@ int HandleTxReqs(struct SmapDriverData *SmapDrivPrivData)
             return result; // Queue full
 
         SmapDrivPrivData->packetToSend = NULL;
-        NetManTxPacketDeQ();
+        SMAPCommonTxPacketDeQ(&data);
     }
 }

@@ -13,25 +13,27 @@
  */
 
 #include "kernel.h"
+#include "timer.h"
 #include "string.h"
+#include <timer_alarm.h>
 
 #ifdef F__InitSys
 void _InitSys(void)
 {
-#ifndef KERNEL_NO_PATCHES
+    StartTimerSystemTime();
+    InitTimerAlarm();
     InitAlarm();
     InitThread();
     InitExecPS2();
     InitTLBFunctions();
-#endif
 }
 #endif
 
 #ifdef F_TerminateLibrary
 void TerminateLibrary(void)
 {
-#ifndef KERNEL_NO_PATCHES
+    DeinitTimerAlarm();
+    StopTimerSystemTime();
     InitTLB();
-#endif
 }
 #endif

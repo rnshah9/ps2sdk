@@ -5,7 +5,7 @@
 #include <gs_gp.h>
 
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <sys/fcntl.h>
 #include <string.h>
 
@@ -438,7 +438,7 @@ char *fontx_get_char(fontx_t* fontx, unsigned short c)
 
 	}
 
-	for (i = 0; i < table; i++)
+	for (i = 0; i < (unsigned int)table; i++)
 	{
 
 		table_offset += fontx_header->block[i].end - fontx_header->block[i].start;

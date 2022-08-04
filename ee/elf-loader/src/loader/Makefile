@@ -12,19 +12,22 @@ EE_OBJS = loader.o
 MAPFILE = loader.map
 
 # Include directories
-EE_INCS := $(EE_INCS) -I$(PS2SDKSRC)/ee/kernel/include -I$(PS2SDKSRC)/common/include -I$(PS2SDKSRC)/ee/libc/include
-EE_LIBS := $(EE_LIBS) -L$(PS2SDKSRC)/ee/kernel/lib -L$(PS2SDKSRC)/ee/libc/lib -L$(PS2SDKSRC)/ee/rpc/cdvd/lib
+EE_INCS := $(EE_INCS) -I$(PS2SDKSRC)/ee/kernel/include -I$(PS2SDKSRC)/common/include -I$(PS2SDKSRC)/ee/libcglue/include
+EE_LIBS := $(EE_LIBS) -L$(PS2SDKSRC)/ee/kernel/lib -L$(PS2SDKSRC)/ee/libcglue/lib -L$(PS2SDKSRC)/ee/rpc/cdvd/lib
 
 EE_CFLAGS = -D_EE -Os -G0 -Wall -Werror
 EE_CFLAGS += -fdata-sections -ffunction-sections
-EE_LDFLAGS = -Tlinkfile -Wl,-zmax-page-size=128 -Wl,-Map,$(MAPFILE)
+EE_LDFLAGS += -Tlinkfile -Wl,-zmax-page-size=128 -Wl,-Map,$(MAPFILE)
 EE_LDFLAGS += -s -Wl,--gc-sections
+
+#Uso nano newlib for saving space
+EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group -lc_nano -lcdvd -lcglue -lkernel -Wl,--end-group
 
 %.o: %.c
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
 $(EE_BIN) : $(EE_OBJS)
-	$(EE_CC) $(EE_CFLAGS) $(EE_LDFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LIBS)
+	$(EE_CC) $(EE_CFLAGS) -o $(EE_BIN) $(EE_OBJS) $(EE_LIBS) $(EE_LDFLAGS)
 
 all: $(EE_BIN)
 

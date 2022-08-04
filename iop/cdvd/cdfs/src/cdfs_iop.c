@@ -8,16 +8,6 @@
 #define TRUE 1
 #define FALSE 0
 
-// Macros for READ Data pattan
-#define CdSecS2048 0  // sector size 2048
-#define CdSecS2328 1  // sector size 2328
-#define CdSecS2340 2  // sector size 2340
-
-// Macros for Spindle control
-#define CdSpinMax 0
-#define CdSpinNom 1  // Starts reading data at maximum rotational velocity and if a read error occurs, the rotational velocity is reduced.
-#define CdSpinStm 0  // Recommended stream rotation speed.
-
 #define MAX_DIR_CACHE_SECTORS 32
 
 struct DirTocEntry
@@ -983,7 +973,7 @@ int cdfs_getDir(const char *pathname, const char *extensions, enum CDFS_getMode 
 
                 dir_entry++;
 
-                if (matched_entries >= req_entries)  // if we've filled the requested buffer
+                if ((unsigned int)matched_entries >= req_entries)  // if we've filled the requested buffer
                     return (matched_entries);        // then just return
 
             }  // end of the current cache block
@@ -1067,7 +1057,7 @@ int cdfs_getDir(const char *pathname, const char *extensions, enum CDFS_getMode 
 
                 dir_entry++;
 
-                if (matched_entries >= req_entries)  // if we've filled the requested buffer
+                if ((unsigned int)matched_entries >= req_entries)  // if we've filled the requested buffer
                     return (matched_entries);        // then just return
 
             }  // end of the current cache block

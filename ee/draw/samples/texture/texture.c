@@ -11,6 +11,7 @@
 
 #include <kernel.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <tamtypes.h>
 #include <math3d.h>
 
@@ -95,7 +96,7 @@ void load_texture(texbuffer_t *texbuf)
 
 	packet_t *packet = packet_init(50,PACKET_NORMAL);
 
-	qword_t *q = packet->data;
+	qword_t *q;
 
 	q = packet->data;
 
@@ -290,7 +291,7 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 
 	// The buffers to be used.

@@ -3,25 +3,29 @@
 #include <thbase.h>
 #include <thevent.h>
 
-//#define DEBUG  //comment out this line when not debugging
+#include <bd_cache.h>
+
+// #define DEBUG  //comment out this line when not debugging
 #include "module_debug.h"
 
-struct bdm_mounts {
-    struct block_device* bd;
-    struct file_system* fs;
+struct bdm_mounts
+{
+    struct block_device *bd; // real block device
+    struct block_device *cbd; // cached block device
+    struct file_system *fs;
 };
 
 #define MAX_CONNECTIONS 20
 static struct bdm_mounts g_mount[MAX_CONNECTIONS];
-static struct file_system* g_fs[MAX_CONNECTIONS];
+static struct file_system *g_fs[MAX_CONNECTIONS];
 static bdm_cb g_cb       = NULL;
 static int bdm_event     = -1;
 static int bdm_thread_id = -1;
 
 /* Event flag bits */
-#define BDM_EVENT_CB_MOUNT 0x01
+#define BDM_EVENT_CB_MOUNT  0x01
 #define BDM_EVENT_CB_UMOUNT 0x02
-#define BDM_EVENT_MOUNT 0x04
+#define BDM_EVENT_MOUNT     0x04
 
 void bdm_RegisterCallback(bdm_cb cb)
 {
@@ -43,7 +47,7 @@ void bdm_RegisterCallback(bdm_cb cb)
     }
 }
 
-void bdm_connect_bd(struct block_device* bd)
+void bdm_connect_bd(struct block_device *bd)
 {
     int i;
 
@@ -52,6 +56,8 @@ void bdm_connect_bd(struct block_device* bd)
     for (i = 0; i < MAX_CONNECTIONS; ++i) {
         if (g_mount[i].bd == NULL) {
             g_mount[i].bd = bd;
+            // Create cache for entire device only (not for the partitions on it)
+            g_mount[i].cbd = (bd->parNr == 0) ? bd_cache_create(bd) : NULL;
             // New block device, try to mount it to a filesystem
             SetEventFlag(bdm_event, BDM_EVENT_MOUNT);
             break;
@@ -59,7 +65,7 @@ void bdm_connect_bd(struct block_device* bd)
     }
 }
 
-void bdm_disconnect_bd(struct block_device* bd)
+void bdm_disconnect_bd(struct block_device *bd)
 {
     int i;
 
@@ -67,17 +73,27 @@ void bdm_disconnect_bd(struct block_device* bd)
 
     for (i = 0; i < MAX_CONNECTIONS; ++i) {
         if (g_mount[i].bd == bd) {
-            g_mount[i].fs->disconnect_bd(bd);
-            M_PRINTF("%s%dp%d unmounted from %s\n", bd->name, bd->devNr, bd->parNr, g_mount[i].fs->name);
+            if (g_mount[i].fs != NULL) {
+                // Unmount filesystem
+                g_mount[i].fs->disconnect_bd(g_mount[i].cbd != NULL ? g_mount[i].cbd : g_mount[i].bd);
+                M_PRINTF("%s%dp%d unmounted from %s\n", bd->name, bd->devNr, bd->parNr, g_mount[i].fs->name);
+                g_mount[i].fs = NULL;
+            }
+
+            if (g_mount[i].cbd != NULL) {
+                bd_cache_destroy(g_mount[i].cbd);
+                g_mount[i].cbd = NULL;
+            }
+
             g_mount[i].bd = NULL;
-            g_mount[i].fs = NULL;
+
             if (g_cb != NULL)
                 SetEventFlag(bdm_event, BDM_EVENT_CB_UMOUNT);
         }
     }
 }
 
-void bdm_connect_fs(struct file_system* fs)
+void bdm_connect_fs(struct file_system *fs)
 {
     int i;
 
@@ -94,7 +110,7 @@ void bdm_connect_fs(struct file_system* fs)
     SetEventFlag(bdm_event, BDM_EVENT_MOUNT);
 }
 
-void bdm_disconnect_fs(struct file_system* fs)
+void bdm_disconnect_fs(struct file_system *fs)
 {
     int i;
 
@@ -118,18 +134,18 @@ void bdm_disconnect_fs(struct file_system* fs)
     }
 }
 
-void bdm_get_bd(struct block_device** pbd, unsigned int count)
+void bdm_get_bd(struct block_device **pbd, unsigned int count)
 {
     int i;
 
     M_DEBUG("%s\n", __func__);
 
     // Fill pointer array with block device pointers
-    for (i = 0; i < count && i < MAX_CONNECTIONS; i++)
+    for (i = 0; (unsigned int)i < count && i < MAX_CONNECTIONS; i++)
         pbd[i] = g_mount[i].bd;
 }
 
-static void bdm_try_mount(struct bdm_mounts* mount)
+static void bdm_try_mount(struct bdm_mounts *mount)
 {
     int i;
 
@@ -137,7 +153,7 @@ static void bdm_try_mount(struct bdm_mounts* mount)
 
     for (i = 0; i < MAX_CONNECTIONS; ++i) {
         if (g_fs[i] != NULL) {
-            if (g_fs[i]->connect_bd(mount->bd) == 0) {
+            if (g_fs[i]->connect_bd(mount->cbd != NULL ? mount->cbd : mount->bd) == 0) {
                 M_PRINTF("%s%dp%d mounted to %s\n", mount->bd->name, mount->bd->devNr, mount->bd->parNr, g_fs[i]->name);
                 mount->fs = g_fs[i];
                 if (g_cb != NULL)
@@ -148,7 +164,7 @@ static void bdm_try_mount(struct bdm_mounts* mount)
     }
 }
 
-static void bdm_thread(void* arg)
+static void bdm_thread(void *arg)
 {
     u32 EFBits;
     int i;
@@ -191,9 +207,10 @@ int bdm_init()
     M_DEBUG("%s\n", __func__);
 
     for (i = 0; i < MAX_CONNECTIONS; ++i) {
-        g_mount[i].bd = NULL;
-        g_mount[i].fs = NULL;
-        g_fs[i]       = NULL;
+        g_mount[i].bd  = NULL;
+        g_mount[i].cbd = NULL;
+        g_mount[i].fs  = NULL;
+        g_fs[i]        = NULL;
     }
 
     EventFlagData.attr   = 0;

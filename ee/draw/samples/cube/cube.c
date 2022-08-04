@@ -11,6 +11,7 @@
 
 #include <kernel.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <tamtypes.h>
 #include <math3d.h>
 
@@ -219,7 +220,7 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 
 	// The buffers to be used.

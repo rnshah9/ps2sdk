@@ -61,7 +61,8 @@ static iop_device_ops_t tty_ops = {
     (void *)tty_error,
     (void *)tty_error,
     (void *)tty_error,
-    (void *)tty_error};
+    (void *)tty_error,
+};
 
 /* device descriptor */
 static iop_device_t tty_device = {
@@ -69,7 +70,8 @@ static iop_device_t tty_device = {
     IOP_DT_CHAR | IOP_DT_CONS,
     1,
     "TTY via SMAP UDP",
-    &tty_ops};
+    &tty_ops,
+};
 
 
 /* KPRTTY */
@@ -159,15 +161,15 @@ static void kprtty_init(void)
 
     kpa = &g_kprarg;
 
-    efp.attr = EA_SINGLE;
+    efp.attr   = EA_SINGLE;
     efp.option = 0;
-    efp.bits = 0;
+    efp.bits   = 0;
 
-    thp.attr = TH_C;
-    thp.option = 0;
-    thp.thread = &KPRTTY_Thread;
+    thp.attr      = TH_C;
+    thp.option    = 0;
+    thp.thread    = &KPRTTY_Thread;
     thp.stacksize = 0x800;
-    thp.priority = 8;
+    thp.priority  = 8;
 
     kpa->eflag = CreateEventFlag(&efp);
     kpa->bsize = KPR_BUFFER_SIZE;
@@ -182,7 +184,7 @@ static void kprtty_init(void)
 }
 #endif
 
-int _start(int argc, char **argv)
+int _start(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
@@ -197,7 +199,7 @@ int _start(int argc, char **argv)
 
     close(0);
     close(1);
-    DelDrv(DEVNAME);
+    DelDrv(tty_device.name);
 
     if (AddDrv(&tty_device) < 0)
         return MODULE_NO_RESIDENT_END;
@@ -228,8 +230,8 @@ static int udp_send(void *buf, size_t size)
 {
     struct sockaddr_in peer;
 
-    peer.sin_family = AF_INET;
-    peer.sin_port = htons(18194);
+    peer.sin_family      = AF_INET;
+    peer.sin_port        = htons(18194);
     peer.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     lwip_sendto(udp_socket, buf, size, 0, (struct sockaddr *)&peer, sizeof(peer));

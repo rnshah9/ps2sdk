@@ -17,6 +17,7 @@
 #define __DEBUG_H__
 
 #include <tamtypes.h>
+#include <stdarg.h>
 
 #define DEBUG_BGCOLOR(col) *((u64 *) 0x120000e0) = (u64) (col)
 
@@ -26,6 +27,7 @@ extern "C" {
 
 void init_scr(void);
 void scr_printf(const char *, ...) __attribute__((format(printf,1,2)));
+void scr_vprintf(const char *format, va_list opt);
 void scr_putchar(int x, int y, u32 color, int ch);
 void ps2GetStackTrace(unsigned int* results,int max);
 void scr_setXY(int x, int y);
