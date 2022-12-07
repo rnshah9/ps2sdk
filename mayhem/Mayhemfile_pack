@@ -1,0 +1,6 @@
+project: ps2sdk
+target: pack
+
+cmds:
+  - cmd: /fuzz_pack
+    libfuzzer: true
